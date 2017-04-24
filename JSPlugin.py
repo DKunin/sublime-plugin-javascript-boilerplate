@@ -13,7 +13,20 @@ sublime.Region.__iter__ = lambda self: self.totuple().__iter__()
 
 SCRIPT_PATH = os.path.join(sublime.packages_path(), os.path.dirname(os.path.realpath(__file__)), 'js-plugin-code.js')
 
+template = '''
+<span>
+Phantom
+<a href="copy-stuff">copy</a> |
+<a href="close"><close>x</close></a>
+</span>
+'''
+
+
 class JsPluginCommand(sublime_plugin.TextCommand):
+    def __init__(self, view):
+        self.view = view
+        self.phantom_set = sublime.PhantomSet(view, 'js-script')
+
     def run(self, edit):
         config = self.get_config()
 
@@ -32,9 +45,18 @@ class JsPluginCommand(sublime_plugin.TextCommand):
             if processed:
                 self.view.replace(edit, region, processed)
 
-    def process(self, css, config):
+    def on_phantom_close(self, href):
+        if href.startswith('copy'):
+            copy_text = href.replace('copy-','')
+            sublime.set_clipboard(copy_text)
+
+        self.view.erase_phantoms('js-script')
+
+    def process(self, text, config):
         config = json.dumps(config)
         folder = os.path.dirname(self.view.file_name())
+        phantoms = []
+        self.view.erase_phantoms('js-script')
         try:
             p = Popen(['node', SCRIPT_PATH] + [config, folder],
                 stdout=PIPE, stdin=PIPE, stderr=PIPE,
@@ -42,8 +64,11 @@ class JsPluginCommand(sublime_plugin.TextCommand):
         except OSError:
             raise Exception("Couldn't find Node.js. Make sure it's in your " +
                             '$PATH by running `node -v` in your command-line.')
-        stdout, stderr = p.communicate(input=css.encode('utf-8'))
+        stdout, stderr = p.communicate(input=text.encode('utf-8'))
         if stdout:
+            phantom = sublime.Phantom(self.view.sel()[0], template, sublime.LAYOUT_BLOCK, self.on_phantom_close)
+            phantoms.append(phantom)
+            self.phantom_set.update(phantoms)
             return stdout.decode('utf-8')
         else:
             sublime.error_message('JS plugin error error:\n%s' % stderr.decode('utf-8'))
