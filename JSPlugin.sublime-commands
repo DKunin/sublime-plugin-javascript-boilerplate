@@ -1,0 +1,6 @@
+[
+    {
+        "caption": "Run JS:plugin",
+        "command": "js_plugin"
+    }
+]
